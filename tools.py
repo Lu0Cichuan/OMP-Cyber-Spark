@@ -121,7 +121,7 @@ def count_mse(original_signal, recovered_signal):
 
 def omp_terminal(weight, support, time, frequencies, original_parameter, mse):
     # 在控制台输出当次OMP迭代运行结果
-    print('/nOMP迭代完成。总次数:', time)
+    print(f'\nOMP迭代完成。总次数:', time)
 
     print('当前迭代结果：')
     for i in support[:5]:
@@ -140,7 +140,7 @@ def omp_terminal(weight, support, time, frequencies, original_parameter, mse):
         print('+', end='')
     print('\b')
 
-    print('/nMSE：', mse)
+    print(f'\nMSE：', mse)
 
 
 def draw_single_signal(x, y, title, xlabel=None, ylabel=None):
