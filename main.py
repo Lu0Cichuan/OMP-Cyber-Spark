@@ -9,7 +9,7 @@ from mp import cs_omp, draw_single_signal, draw_double_signal
 
 def settings(t=None, frequencies=None,
              gate=None,
-             picture_output=0, terminal_output=0, log_output=0):
+             picture_output=None, terminal_output=None, log_output=None):
     if t is None:
         t = np.linspace(0, 10, 5000, endpoint=False)
     # 设置时间轴
@@ -102,4 +102,4 @@ def test(orientation=10):
     print('信号恢复率：', 100 * (1 - np.sum(np.array(MSE) > 1) / orientation), '%')
 
 
-test(100)
+test(1)
