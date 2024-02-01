@@ -26,7 +26,7 @@ def generate_random_cos_signal(t, frequencies, num):
     for _ in range(num):
         strength = random.random()
         frequency = np.random.choice(frequencies)
-        # np.append(frequencies, frequency)
+        np.append(frequencies, frequency)
         cos = strength * np.cos(2 * np.pi * frequency * t)
         signal = signal + cos
         parameter.append([strength, frequency])
@@ -38,7 +38,7 @@ def generate_frequencies(frequencies_start=None, frequencies_stop=None, frequenc
     ## 可以调整最低频率、最高频率和频率间隔
     if frequencies_start is None and frequencies_stop is None and frequencies_interval is None:
         frequencies = np.arange(0, 5, 0.001)
-    elif (frequencies_start > frequencies_stop > 0) and (frequencies_interval > 0):
+    elif (frequencies_stop > frequencies_start > 0) and (frequencies_interval > 0):
         frequencies = np.arange(frequencies_start, frequencies_stop, frequencies_interval)
     else:
         print('please enter valid frequencies range and interval')
@@ -165,3 +165,30 @@ def draw_double_signal(x, y1, y2, title, xlabel=None, ylabel=None):
     plt.grid(True)
     plt.legend()
     plt.show()
+
+
+def draw_mse_line(t, MSE, title='MSE vs t'):
+    # 绘制连续多次运行时mse随t的变化曲线
+    ## 纵坐标被设置为对数坐标
+    ## 增补了代表yy平均值的虚线
+    plt.figure()
+    plt.plot(t, MSE, label='MSE')
+    plt.yscale('log')
+    plt.xlabel('t')
+    plt.ylabel('MSE')
+    plt.legend()
+
+    avg_yy = np.mean(MSE)
+    plt.axhline(y=avg_yy, color='r', linestyle='--', label='Average MSE')
+    plt.legend()
+
+    plt.show()
+
+
+def mse_terminal(MSE, num_tolerance):
+    # 用于输出多次运行后的MSE统计数据
+    print('Max MSE:', np.max(MSE))
+    print('Min MSE:', np.min(MSE))
+    print('Average MSE:', np.mean(MSE))
+    # 计算MSE数组中小于num_tolerance的元素所占的比例
+    print('MSE <', num_tolerance, ':', np.sum(np.log10(MSE) < -10) / len(MSE))
