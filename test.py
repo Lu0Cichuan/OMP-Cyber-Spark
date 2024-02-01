@@ -2,7 +2,6 @@ import random
 
 import numpy as np
 from sklearn.metrics import mean_squared_error
-from tqdm import tqdm
 
 from mp import cs_omp, draw_single_signal, draw_double_signal
 
@@ -64,7 +63,7 @@ def initialize(t, frequencies, gate):
     return signal, D, sampling
 
 
-def main():
+def mse_count():
     t, frequencies, gate, picture_output, terminal_output, log_output = settings()
     # 根据设置函数，初始化运行基本参数
 
@@ -93,13 +92,4 @@ def main():
     return mse
 
 
-def test(orientation=10):
-    MSE = []
-    for _ in tqdm(range(orientation), desc='OMP Running'):
-        MSE.append(main())
-    print('MSE均值:', np.mean(MSE))
-    print('MSE大于1的次数:', np.sum(np.array(MSE) > 1))
-    print('信号恢复率：', 100 * (1 - np.sum(np.array(MSE) > 1) / orientation), '%')
 
-
-test(1)
