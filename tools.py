@@ -6,6 +6,8 @@ from sklearn.metrics import mean_squared_error
 
 
 def generate_t_line(t_start=None, t_stop=None, t_num=None):
+    # 生成一条时间轴
+    ## 可以调整起始、终止与总采样点数
     if t_start is None and t_stop is None and t_num is None:
         t = np.linspace(0, 10, 5000, endpoint=False)
     elif (t_stop > t_start) and (t_num > 0):
@@ -13,12 +15,12 @@ def generate_t_line(t_start=None, t_stop=None, t_num=None):
     else:
         print('please enter valid time range and number of points')
         exit(-1)
-    # 设置时间轴
-    ## 可以调整起始、终止与总取点数
     return t
 
 
 def generate_random_cos_signal(t, frequencies, num):
+    # 生成一些（个数为num）随机的余弦信号，并将它们叠加获得原始信号
+    ## 暂不允许自定义原始信号
     signal = np.zeros(len(t))
     parameter = []
     for _ in range(num):
@@ -32,6 +34,8 @@ def generate_random_cos_signal(t, frequencies, num):
 
 
 def generate_frequencies(frequencies_start=None, frequencies_stop=None, frequencies_interval=None):
+    # 生成一个频率数组，用于生成随机余弦信号和字典
+    ## 可以调整最低频率、最高频率和频率间隔
     if frequencies_start is None and frequencies_stop is None and frequencies_interval is None:
         frequencies = np.arange(0, 5, 0.001)
     elif (frequencies_start > frequencies_stop > 0) and (frequencies_interval > 0):
@@ -44,15 +48,15 @@ def generate_frequencies(frequencies_start=None, frequencies_stop=None, frequenc
 
 
 def generate_cos_dictionary(t, frequencies):
-    dictionary = np.array([np.cos(2 * np.pi * f * t) for f in frequencies]).T
     # 生成字典
-    ## 可以调整字典的频率范围
-    ## 务必保证字典中的元素是可以完全表示信号的
-
+    dictionary = np.array([np.cos(2 * np.pi * f * t) for f in frequencies]).T
     return dictionary
 
 
 def generate_sampling_matrix(t, gate):
+    # 生成采样矩阵，用于对原始信号进行采样压缩
+    ## 可以调整gate值，来控制采样阵中的0、1比例
+    ## gate越大，0越多，1越少，有效采样越少，压缩率越高
     if gate is None:
         gate = 0.9
     sampling_matrix = np.zeros(t.shape)
@@ -61,13 +65,13 @@ def generate_sampling_matrix(t, gate):
             sampling_matrix[i] = 0
         else:
             sampling_matrix[i] = 1
-    # 设置采样阵gate值
-    ## 可以调整gate值，用于控制sampling中的0、1比例
-    ## gate越大，0越多，1越少，有效采样越少，压缩率越高
+
     return sampling_matrix
 
 
 def cs_omp(dictionary, original_signal, sampling_matrix=None, num_tolerance=1e-2, time_tolerance=60):
+    # 使用omp算法对被采样后的信号进行复原
+
     # 如果采样阵非空，则对字典和原信号均进行采样
     if sampling_matrix is not None:
         column_matrices = [dictionary[:, i] for i in range(dictionary.shape[1])]
@@ -111,11 +115,13 @@ def cs_omp(dictionary, original_signal, sampling_matrix=None, num_tolerance=1e-2
 
 
 def count_mse(original_signal, recovered_signal):
+    # 计算复原后信号与原始信号的最小均方误差
     return mean_squared_error(original_signal, recovered_signal)
 
 
 def omp_terminal(weight, support, time, frequencies, original_parameter, mse):
-    print('OMP迭代完成。总次数:', time)
+    # 在控制台输出当次OMP迭代运行结果
+    print('/nOMP迭代完成。总次数:', time)
 
     print('当前迭代结果：')
     for i in support[:5]:
@@ -134,11 +140,11 @@ def omp_terminal(weight, support, time, frequencies, original_parameter, mse):
         print('+', end='')
     print('\b')
 
-    print('MSE：')
-    print(mse)
+    print('/nMSE：', mse)
 
 
 def draw_single_signal(x, y, title, xlabel=None, ylabel=None):
+    # 画一条线
     plt.figure(figsize=(10, 4))
     plt.plot(x, y)
     plt.title(title)
@@ -149,6 +155,7 @@ def draw_single_signal(x, y, title, xlabel=None, ylabel=None):
 
 
 def draw_double_signal(x, y1, y2, title, xlabel=None, ylabel=None):
+    # 画两条相互对比的线
     plt.figure(figsize=(10, 4))
     plt.plot(x, y1, label='Original')
     plt.plot(x, y2, label='Reconstructed')
