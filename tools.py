@@ -31,11 +31,11 @@ def generate_random_cos_signal(t, frequencies, num):
     return signal, parameter
 
 
-def generate_frequencies(frequencies_start=None, frequencies_stop=None, frequencies_inteval=None):
-    if frequencies_start is None and frequencies_stop is None and frequencies_inteval is None:
+def generate_frequencies(frequencies_start=None, frequencies_stop=None, frequencies_interval=None):
+    if frequencies_start is None and frequencies_stop is None and frequencies_interval is None:
         frequencies = np.arange(0, 5, 0.001)
-    elif (frequencies_start > frequencies_stop > 0) and (frequencies_inteval > 0):
-        frequencies = np.arange(frequencies_start, frequencies_stop, frequencies_inteval)
+    elif (frequencies_start > frequencies_stop > 0) and (frequencies_interval > 0):
+        frequencies = np.arange(frequencies_start, frequencies_stop, frequencies_interval)
     else:
         print('please enter valid frequencies range and interval')
         exit(-1)

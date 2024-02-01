@@ -13,7 +13,7 @@ def main():
 
     t = generate_t_line(t_start=None, t_stop=None, t_num=None)
 
-    frequencies = generate_frequencies(frequencies_start=None, frequencies_stop=None, frequencies_inteval=None)
+    frequencies = generate_frequencies(frequencies_start=None, frequencies_stop=None, frequencies_interval=None)
 
     original_signal, original_parameter = generate_random_cos_signal(t, frequencies, num)
 
