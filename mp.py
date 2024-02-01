@@ -1,67 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-
-def omp(dictionary, original_signal, frequencies, num_tolerance=1e-6, time_tolerance=60,
-        picture_output=1, terminal_output=1, log_output=1, ):
-    """
-    Orthogonal Matching Pursuit (OMP)
-    dictionary: 字典
-    original_signal: 原始信号
-    tol: tolerance、容忍度
-    sampling:采样压缩矩阵
-    """
-    # 初始化
-
-    # 初始化权重数组，用于表示字典中每个元素的权重
-    weight = np.zeros(dictionary.shape[1])
-
-    # 初始化残差信号，其初值为原始信号，在每一轮循环中会减去相关程度最高的字典信号
-    residual = original_signal.copy()
-
-    # 初始化支持集，其内容为已被选中的字典信号的索引
-    support = []
-
-    # 初始化迭代次数
-    time = 0
-
-    # 迭代直至误差可容忍或迭代次数过多
-    while np.linalg.norm(residual) > num_tolerance and time < time_tolerance:
-        # 计算相关性
-        corr = dictionary.T @ residual
-
-        # 寻找最佳匹配元素
-        i = np.argmax(np.abs(corr))
-
-        # 将最佳匹配元素添加至Support
-        support.append(i)
-
-        # 解决最小方差问题
-        weight[support] = np.linalg.lstsq(dictionary[:, support], original_signal, rcond=None)[0]
-
-        # 更新残差
-        residual = original_signal - dictionary @ weight
-
-        # 记录迭代次数
-        time += 1
-
-        # 输出日志
-        if terminal_output == 1:
-            omp_terminal(weight, support, time, frequencies)
-    if terminal_output == 1:
-        print('OMP迭代完成。总次数:', time)
-        print('当前迭代结果：')
-        for i in support:
-            print(str(weight[i])[:4].strip('[').strip(']') +
-                  "*cos(" +
-                  str(frequencies[i]).strip('[').strip(']') +
-                  "0*2*pi*t)",
-                  end='')
-            print('+', end='')
-        print('\b')
-    return weight
-
-
 def cs_omp(dictionary, original_signal, frequencies, num_tolerance=1e-6, time_tolerance=60,
            picture_output=1, terminal_output=1, log_output=1, sampling=None, t=None):
     """
