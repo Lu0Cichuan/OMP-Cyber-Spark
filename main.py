@@ -95,7 +95,7 @@ def main():
 
 def test(orientation=10):
     MSE = []
-    for i in tqdm(range(orientation), desc='OMP Running'):
+    for _ in tqdm(range(orientation), desc='OMP Running'):
         MSE.append(main())
     print('MSE均值:', np.mean(MSE))
     print('MSE大于1的次数:', np.sum(np.array(MSE) > 1))
