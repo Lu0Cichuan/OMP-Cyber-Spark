@@ -4,7 +4,7 @@ from tools import generate_random_cos_signal, generate_cos_dictionary, generate_
 
 def main():
     num = 4
-    gate = 0.94
+    gate = 0.99
     picture_output = 1
     terminal_output = 1
     log_output = 1
