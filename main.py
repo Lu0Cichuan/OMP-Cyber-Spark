@@ -1,27 +1,20 @@
-import numpy as np
-from tqdm import tqdm
+import os
 
-from tools import load_in_gray_image, split_array, generate_t_line, cs_huge_scale_omp, \
-    generate_fourier_element_in_dictionary, load_out_gray_image
+from tools import load_in_gray_image, generate_fourier_element_in_dictionary, load_out_gray_image, cs_pieces_omp
 
-img = load_in_gray_image('pictures/raw/2.JPG', 1)
+picture_rank = 2
+img = load_in_gray_image('pictures/raw/' + str(picture_rank) + '.JPG', 1)
 img_array = img[0]
 
-length = 20
-truncated_arr = split_array(img_array, length)
-solved_arr_list = []
-result = None
-for i in tqdm(range(len(truncated_arr))):
-    # for arr in truncated_arr:
-    arr = truncated_arr[i]
-    # 对每个子项进行操作，得到solved_arr
-    t = generate_t_line(0, 4, arr.shape[0])
-    solved_arr = cs_huge_scale_omp(200, arr, t, generate_fourier_element_in_dictionary,
-                                       time_tolerance=10, picture_output=0)[0]
-    # 将solved_arr添加到solved_arr_list中
-    solved_arr_list.append(solved_arr)
-
-    # 将solved_arr_list中的子数组拼接成一维数组
-result = np.concatenate(solved_arr_list)
-load_out_gray_image('pictures/saved/2.JPG', result, resolution=img[1], picture_output=1)
+recovered_img_array, mse = cs_pieces_omp(40, img_array, 30, 0.5, generate_fourier_element_in_dictionary,
+                                         None, mse_tolerance=1e-6, time_tolerance=20, picture_output=1)
+i = 0
+while True:
+    if os.path.exists('pictures/saved/' + str(picture_rank) + '_' + str(i) + '.JPG'):
+        i = i + 1
+        pass
+    else:
+        load_out_gray_image('pictures/saved/' + str(picture_rank) + '_' + str(i) + '.JPG', recovered_img_array,
+                            resolution=img[1], picture_output=1)
+        break
 input("Press Enter to continue...")

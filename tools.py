@@ -127,7 +127,7 @@ def cs_omp(dictionary, original_signal, sampling_matrix=None, mse_tolerance=1e-6
 
 
 def generate_fourier_element_in_dictionary(t, dictionary_scale, rank):
-    frequencies = np.linspace(0, dictionary_scale - 1, dictionary_scale)
+    frequencies = np.linspace(0, (dictionary_scale - 1) / 10, dictionary_scale)
     return np.cos(2 * np.pi * frequencies[rank] * t)
 
 
@@ -138,7 +138,7 @@ def split_array(arr, y):
 
 
 def cs_huge_scale_omp(dictionary_scale, original_signal, t, generate_dictionary_element, sampling_matrix=None,
-                      mse_tolerance=1e-6, time_tolerance=600, ram_usage_tolerance=None, ram_spare_tolerance=None,
+                      mse_tolerance=1e-6, time_tolerance=30, ram_usage_tolerance=None, ram_spare_tolerance=None,
                       picture_output=1):
     if sampling_matrix is not None:
         original_signal = original_signal * sampling_matrix
@@ -204,6 +204,32 @@ def cs_huge_scale_omp(dictionary_scale, original_signal, t, generate_dictionary_
     recovered_signal = dictionary @ weight[:len(dic_support)]
     recover = [recovered_signal, dictionary, weight, time, mse]
     return recover
+
+
+def cs_pieces_omp(dictionary_scale, original_signal, pieces_length, t_range, generate_dictionary_element,
+                  sampling_matrix=None,
+                  mse_tolerance=1e-6, time_tolerance=600, ram_usage_tolerance=None, ram_spare_tolerance=None,
+                  picture_output=1):
+    truncated_arr = split_array(original_signal, pieces_length)
+    solved_arr_list = []
+    result = None
+    t = None
+    for i in tqdm(range(len(truncated_arr))):
+        arr = truncated_arr[i]
+        t = generate_t_line(0, t_range, arr.shape[0])
+        solved_arr = cs_huge_scale_omp(dictionary_scale, arr, t, generate_dictionary_element, None,
+                                       mse_tolerance, time_tolerance, picture_output=0)[0]
+        # 将solved_arr添加到solved_arr_list中
+        solved_arr_list.append(solved_arr)
+
+        # 将solved_arr_list中的子数组拼接成一维数组
+    result = np.concatenate(solved_arr_list)
+    residual = original_signal - result
+    mse = count_mse(original_signal, residual)
+    t = generate_t_line(0, t_range, len(result))
+    if picture_output == 1:
+        draw_double_signal(t, original_signal, result)
+    return result, mse
 
 
 def count_mse(original_signal, recovered_signal):
