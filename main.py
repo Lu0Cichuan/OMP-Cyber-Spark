@@ -1,41 +1,26 @@
-from tools import generate_random_cos_signal, generate_cos_dictionary, generate_sampling_matrix, \
-    generate_t_line, generate_frequencies, cs_omp, count_mse, omp_terminal, draw_single_signal, draw_double_signal
+import numpy as np
+from tqdm import tqdm
 
+import omp_tools as omp
 
-def main():
-    num = 4
-    gate = 0.94
-    picture_output = 1
-    terminal_output = 1
-    log_output = 1
-    # 设置运行过程中是否输出图片、终端信息、日志信息
-    ## 正常运行请填1开启，机器学习或处理大量数据时请填0关闭
+img = omp.load_in_gray_image('pictures/raw/2.JPG', 1)
+img_array = img[0]
 
-    t = generate_t_line(t_start=None, t_stop=None, t_num=None)
+length = 20
+truncated_arr = omp.split_array(img_array, length)
+solved_arr_list = []
+result = None
+for i in tqdm(range(len(truncated_arr))):
+    # for arr in truncated_arr:
+    arr = truncated_arr[i]
+    # 对每个子项进行操作，得到solved_arr
+    t = omp.generate_t_line(0, 4, arr.shape[0])
+    solved_arr = omp.cs_huge_scale_omp(200, arr, t, omp.generate_fourier_element_in_dictionary,
+                                       time_tolerance=10, picture_output=0)[0]
+    # 将solved_arr添加到solved_arr_list中
+    solved_arr_list.append(solved_arr)
 
-    frequencies = generate_frequencies(frequencies_start=None, frequencies_stop=None, frequencies_interval=None)
-
-    original_signal, original_parameter = generate_random_cos_signal(t, frequencies, num)
-
-    if picture_output == 1:
-        draw_single_signal(t, original_signal, "Original Signal")
-
-    dictionary = generate_cos_dictionary(t, frequencies)
-
-    sampling_matrix = generate_sampling_matrix(t, gate)
-
-    recovered_weight, support, time = cs_omp(dictionary, original_signal, sampling_matrix, 1, 20)
-
-    recovered_signal = dictionary @ recovered_weight
-
-    mse = count_mse(recovered_signal, original_signal)
-
-    if terminal_output == 1:
-        omp_terminal(recovered_weight, support, time, frequencies, original_parameter, mse)
-
-    if picture_output == 1:
-        draw_single_signal(t, original_signal * sampling_matrix, 'Sampled Signal')
-        draw_double_signal(t, original_signal, recovered_signal, "Original Signal and Recovered Signal")
-
-
-main()
+    # 将solved_arr_list中的子数组拼接成一维数组
+    result = np.concatenate(solved_arr_list)
+omp.load_out_gray_image('pictures/saved/2.JPG', result, resolution=img[1], picture_output=1)
+input("Press Enter to continue...")
