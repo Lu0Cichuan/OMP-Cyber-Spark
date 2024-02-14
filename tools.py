@@ -214,10 +214,11 @@ def divide_and_round_up(x, y):
     return quotient
 
 
-def cs_auto_omp(original_signal, pieces_length, dictionary_scale, generate_dictionary_element,
-                mse_tolerance=1e-6, time_tolerance=20, sampling_matrix=None,
-                t_range=1,
-                picture_output=1):
+def cs_auto_romp(original_signal, pieces_length, dictionary_scale, generate_dictionary_element,
+                 mse_tolerance=1e-6, time_tolerance=20, sampling_matrix=None,
+                 t_range=1,
+                 picture_output=1):
+    # part.1 载入原始信号和采样矩阵
     if isinstance(original_signal, str):
         if original_signal[-4:0] != 'json':
             print('要求载入的文件格式不受支持。请载入json格式文件。')
@@ -273,6 +274,10 @@ def cs_auto_omp(original_signal, pieces_length, dictionary_scale, generate_dicti
         pieced_arrays = [signal]
     solved_list = []
     print('已开始复原信号。')
+
+    # part.2 根据字典、采样矩阵与原始信号，求解最佳的字典元素组合以尝试复原信号
+    # 嵌套循坏从外到内依次为：对于切片后的信号，对于此片信号的重构迭代次数，对于本次迭代中每一个字典元素
+
     for i in tqdm(range(len(pieced_arrays)), disable=bool(pieces_disable)):
         arr = pieced_arrays[i]
         t = generate_t_line(random.random() - 1, t_range, arr.shape[0])
@@ -290,8 +295,10 @@ def cs_auto_omp(original_signal, pieces_length, dictionary_scale, generate_dicti
             if sampling_operation == 1:
                 sampling_matrix = sampling_matrix[:len(arr)]
             dictionary_store = {}
+
             # 计算每个序号对应的字典元素与当前残差的相关性
             for rank in range(dictionary_scale):
+                # 引入了内存容量保护。当内存容量足够时，将字典元素存储下来；内存不足时，转为即时生成字典元素以避免内存不足。
                 system_memory_info = psutil.virtual_memory()
                 Memory_Available = system_memory_info.available / 1024 / 1024
                 if rank in dictionary_store.keys():
@@ -335,20 +342,21 @@ def cs_auto_omp(original_signal, pieces_length, dictionary_scale, generate_dicti
             if mse < mse_tolerance:
                 break
 
+        # 生成本片信号的复原信号
         recovered_signal = np.zeros(len(arr))
         for rank in support:
             recovered_signal = recovered_signal + dictionary_store[rank] * weight[rank]
 
-        # 将solved_arr添加到solved_arr_list中
+        # 将solved_arr添加到solved_list中
         solved_list.append(recovered_signal)
 
-    # 将solved_arr_list中的子数组拼接成一维数组
+    # 将solved_list中的子数组拼接成一维数组，得到完整的复原信号
     result = np.concatenate(solved_list)
     residual = original_signal - result
     mse = count_mse(original_signal, result)
     t = generate_t_line(0, t_range, len(result))
+
     if picture_output == 1:
         draw_triple_signal(t, original_signal, result, np.abs(residual))
 
     return result, mse
-    # 初始化权重数组，用于表示字典中每个元素的权重
