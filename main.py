@@ -1,20 +1,12 @@
-import os
+import numpy as np
 
-from tools import load_in_gray_image, generate_fourier_element_in_dictionary, load_out_gray_image, cs_pieces_omp
+from tools import generate_fourier_dictionary_elements, cs_auto_omp
 
-picture_rank = 2
-img = load_in_gray_image('pictures/raw/' + str(picture_rank) + '.JPG', 1)
-img_array = img[0]
+picture_load_in_path = 'pictures/raw'
+picture_load_out_path = 'pictures/saved'
+t = np.linspace(1, 10, 1000)
+array = np.cos(t) + 2.2 * np.cos(10 * t)
+recovered_array, mse = cs_auto_omp(array, 50, 30, generate_fourier_dictionary_elements,
+                                   1e-6, 20, picture_output=1)
 
-recovered_img_array, mse = cs_pieces_omp(40, img_array, 30, 0.5, generate_fourier_element_in_dictionary,
-                                         None, mse_tolerance=1e-6, time_tolerance=20, picture_output=1)
-i = 0
-while True:
-    if os.path.exists('pictures/saved/' + str(picture_rank) + '_' + str(i) + '.JPG'):
-        i = i + 1
-        pass
-    else:
-        load_out_gray_image('pictures/saved/' + str(picture_rank) + '_' + str(i) + '.JPG', recovered_img_array,
-                            resolution=img[1], picture_output=1)
-        break
 input("Press Enter to continue...")

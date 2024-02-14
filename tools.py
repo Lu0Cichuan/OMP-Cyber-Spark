@@ -1,13 +1,16 @@
+import json
+import os.path
 import random
 
 import matplotlib.pyplot as plt
 import numpy as np
+import psutil
 from PIL import Image
 from sklearn.metrics import mean_squared_error
 from tqdm import tqdm
 
 
-def generate_t_line(t_start=None, t_stop=None, t_num=None):
+def generate_t_line(t_start, t_stop, t_num):
     # 这一函数用于生成一条时间轴，以一维np数组形式表示。需要定义起点、终点与总采样数。
     if t_start is None and t_stop is None and t_num is None:
         t = np.linspace(0, 10, 5000, endpoint=False)
@@ -76,57 +79,7 @@ def generate_sampling_line(t, gate):
     return sampling_matrix
 
 
-def cs_omp(dictionary, original_signal, sampling_matrix=None, mse_tolerance=1e-6, time_tolerance=600):
-    # 使用omp算法，根据传入的原信号和字典，尝试使用字典元素的线性组合来复原原信号。
-    # 可以选择传入一维采样阵，也可以不传入；不传入时会将原信号全部作为分析对象。
-    # 可以选择传入mse（均方误差）容忍度，默认为1e-6。
-    # 可以选择传入迭代次数容忍度，默认为600。
-    # 最终返回三个变量：weight用于表示字典元素的线性组合权重，support用于表示参与组合的字典元素下标，time用于表示迭代总次数
-    if sampling_matrix is not None:
-        column_matrices = [dictionary[:, i] for i in range(dictionary.shape[1])]
-        new_matrices = [column * sampling_matrix for column in column_matrices]
-        dictionary = np.column_stack(new_matrices)
-        original_signal = original_signal * sampling_matrix
-
-    # 初始化权重数组，用于表示字典中每个元素的权重
-    weight = np.zeros(dictionary.shape[1])
-
-    # 初始化残差信号，其初值为原始信号，在每一轮循环中会减去相关程度最高的字典信号
-    residual = original_signal.copy()
-
-    # 初始化支持集，其内容为已被选中的字典信号的索引
-    support = []
-
-    # 初始化迭代次数
-    time = 0
-
-    # 迭代直至误差可容忍或迭代次数过多
-    for time in tqdm(range(time_tolerance)):
-        # 计算相关性
-        corr = dictionary.T @ residual
-
-        # 寻找最佳匹配元素
-        i = np.argmax(np.abs(corr))
-
-        # 将最佳匹配元素添加至Support
-        support.append(i)
-
-        # 解决最小方差问题
-        weight[support] = np.linalg.lstsq(dictionary[:, support], original_signal, rcond=None)[0]
-
-        # 更新残差
-        residual = original_signal - dictionary @ weight
-
-        # 记录迭代次数
-        time += 1
-
-        if np.linalg.norm(residual) < mse_tolerance:
-            break
-
-    return weight, support, time
-
-
-def generate_fourier_element_in_dictionary(t, dictionary_scale, rank):
+def generate_fourier_dictionary_elements(t, dictionary_scale, rank):
     frequencies = np.linspace(0, (dictionary_scale - 1) / 10, dictionary_scale)
     return np.cos(2 * np.pi * frequencies[rank] * t)
 
@@ -137,129 +90,9 @@ def split_array(arr, y):
     return fragments
 
 
-def cs_huge_scale_omp(dictionary_scale, original_signal, t, generate_dictionary_element, sampling_matrix=None,
-                      mse_tolerance=1e-6, time_tolerance=30, ram_usage_tolerance=None, ram_spare_tolerance=None,
-                      picture_output=1):
-    if sampling_matrix is not None:
-        original_signal = original_signal * sampling_matrix
-
-    # 初始化权重数组，用于表示字典中每个元素的权重
-    weight = np.zeros(dictionary_scale)
-
-    # 初始化残差信号，其初值为原始信号，在每一轮循环中会减去相关程度最高的字典信号
-    residual = original_signal.copy()
-
-    # 初始化支持集，其内容为已被选中的字典信号的索引
-    support = []
-
-    # 初始化迭代次数
-    time = 0
-
-    # 初始化字典取值
-    dictionary = None
-    dic_support = None
-    mse = None
-
-    # 迭代直至误差可容忍或迭代次数过多
-    for time in tqdm(range(time_tolerance), disable=not bool(picture_output)):
-        corr = np.zeros(dictionary_scale)
-
-        # 计算每个序号对应的字典元素与当前残差的相关性
-        for rank in range(dictionary_scale):
-            if rank in support:
-                pass
-            else:
-                dictionary_element = generate_dictionary_element(t, dictionary_scale, rank)
-                if sampling_matrix is not None:
-                    corr[rank] = (dictionary_element * sampling_matrix).T @ residual
-                else:
-                    corr[rank] = dictionary_element.T @ residual
-
-        # 寻找最佳匹配元素
-        i = np.argmax(np.abs(corr))
-
-        # 将最佳匹配元素添加至Support
-        support.append(i)
-
-        # 生成临时字典
-        dictionary = np.array([generate_dictionary_element(t, dictionary_scale, rank) for rank in support]).T
-        dic_support = [i for i in range(len(support))]
-
-        # 解决最小方差问题
-        weight[dic_support] = np.linalg.lstsq(dictionary, original_signal, rcond=None)[0]
-
-        # 更新残差
-        residual = original_signal - dictionary @ weight[:len(dic_support)]
-
-        # 记录迭代次数
-        time += 1
-
-        mse = np.linalg.norm(residual)
-        if mse < mse_tolerance:
-            break
-
-    if picture_output == 1:
-        draw_double_signal(t, original_signal, dictionary @ weight[:len(dic_support)])
-        draw_single_signal(t, residual)
-    recovered_signal = dictionary @ weight[:len(dic_support)]
-    recover = [recovered_signal, dictionary, weight, time, mse]
-    return recover
-
-
-def cs_pieces_omp(dictionary_scale, original_signal, pieces_length, t_range, generate_dictionary_element,
-                  sampling_matrix=None,
-                  mse_tolerance=1e-6, time_tolerance=600, ram_usage_tolerance=None, ram_spare_tolerance=None,
-                  picture_output=1):
-    truncated_arr = split_array(original_signal, pieces_length)
-    solved_arr_list = []
-    result = None
-    t = None
-    for i in tqdm(range(len(truncated_arr))):
-        arr = truncated_arr[i]
-        t = generate_t_line(0, t_range, arr.shape[0])
-        solved_arr = cs_huge_scale_omp(dictionary_scale, arr, t, generate_dictionary_element, None,
-                                       mse_tolerance, time_tolerance, picture_output=0)[0]
-        # 将solved_arr添加到solved_arr_list中
-        solved_arr_list.append(solved_arr)
-
-        # 将solved_arr_list中的子数组拼接成一维数组
-    result = np.concatenate(solved_arr_list)
-    residual = original_signal - result
-    mse = count_mse(original_signal, residual)
-    t = generate_t_line(0, t_range, len(result))
-    if picture_output == 1:
-        draw_double_signal(t, original_signal, result)
-    return result, mse
-
-
 def count_mse(original_signal, recovered_signal):
     # 用于计算复原后信号与原始信号的最小均方误差
     return mean_squared_error(original_signal, recovered_signal)
-
-
-def omp_terminal(weight, support, time, frequencies, mse=None, original_parameter=None):
-    # 用于在当次omp迭代结束时在控制台输出结果
-    print(f'\nOMP迭代完成。总次数:', time)
-
-    print('当前迭代结果：')
-    for i in support[:5]:
-        print(f"{float(str(weight[i])[:4].strip('[').strip(']')):.2f}" +
-              "*cos(" +
-              f'{frequencies[i]:.2f}' +
-              "*2*pi*t)",
-              end='')
-        print('+', end='')
-    print('\b')
-
-    if original_parameter is not None:
-        print('原始信号数据：')
-        original_parameter = sorted(original_parameter, key=lambda x: x[0], reverse=True)
-        for cos in original_parameter[:5]:
-            print(f'{cos[0]:.2f}'.strip(' ') + "*cos(" + f'{cos[1]:.2f}'.strip(' ') + "*2*pi*t)", end='')
-            print('+', end='')
-        print('\b')
-
-    print(f'\nMSE：', mse)
 
 
 def draw_single_signal(x, y, title=None, xlabel=None, ylabel=None):
@@ -278,6 +111,20 @@ def draw_double_signal(x, y1, y2, title=None, xlabel=None, ylabel=None):
     plt.figure(figsize=(10, 4))
     plt.plot(x, y1, label='Original')
     plt.plot(x, y2, label='Reconstructed')
+    plt.title(title)
+    plt.xlabel(xlabel)
+    plt.ylabel(ylabel)
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
+
+def draw_triple_signal(x, y1, y2, y3, title=None, xlabel=None, ylabel=None):
+    # 画两条相互对比的线
+    plt.figure(figsize=(10, 4))
+    plt.plot(x, y1, label='Original')
+    plt.plot(x, y2, label='Recovered')
+    plt.plot(x, y3, label='Residual')
     plt.title(title)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
@@ -305,18 +152,13 @@ def draw_mse_line(t, MSE):
     plt.show()
 
 
-def mse_terminal(MSE, mse_tolerance):
-    # 用于输出多次运行后的MSE统计数据
-    print('Max MSE:', np.max(MSE))
-    print('Min MSE:', np.min(MSE))
-    print('Average MSE:', np.mean(MSE))
-    # 计算MSE数组中小于num_tolerance的元素所占的比例
-    print('MSE <', mse_tolerance, ':', np.sum(np.log10(MSE) < np.log10(mse_tolerance)) / len(MSE))
-
-
-def load_in_gray_image(path, picture_output=1):
+def load_in_gray_image(path, rank=None, picture_output=1):
     # 打开图像并转换为灰度图
-    img = Image.open(path).convert('L')
+    if rank is None:
+        img = Image.open(path).convert('L')
+    else:
+        path = path + '/' + str(rank) + '.jpg'
+        img = Image.open(path).convert('L')
 
     # 判断是否为灰度图
     if img.mode == 'L':
@@ -338,12 +180,175 @@ def load_in_gray_image(path, picture_output=1):
     return img
 
 
-def load_out_gray_image(path, img_array, resolution, picture_output=1):
+def load_out_gray_image(path, img_array, resolution, rank=None, picture_output=1):
     img_2d = img_array.reshape(resolution[0], resolution[1])
+    img = Image.fromarray(img_2d)
+    if img.mode == "F":
+        img = img.convert('L')
     if picture_output == 1:
-        img = Image.fromarray(img_2d)
-        if img.mode == "F":
-            img = img.convert('L')
         img.show()
-        img.save(path)
+
+    if rank is None:
+        pass
+    else:
+        path = path + '/' + str(rank) + '.jpg'
+
+    i = 0
+    while True:
+        if os.path.exists(path + '_' + str(i)):
+            i = i + 1
+            pass
+        else:
+            img.save(path + '_' + str(i))
+            break
     return img_2d
+
+
+def divide_and_round_up(x, y):
+    quotient = x // y
+    remainder = x % y
+
+    if remainder != 0:
+        quotient += 1
+
+    return quotient
+
+
+def cs_auto_omp(original_signal, pieces_length, dictionary_scale, generate_dictionary_element,
+                mse_tolerance=1e-6, time_tolerance=20, sampling_matrix=None,
+                t_range=1,
+                picture_output=1):
+    if isinstance(original_signal, str):
+        if original_signal[-4:0] != 'json':
+            print('要求载入的文件格式不受支持。请载入json格式文件。')
+            exit(-1)
+        if os.path.exists(original_signal):
+            with open(original_signal, 'r') as file:
+                json_data = json.load(file)
+                signal = np.array(json_data).flatten()
+            print('已成功从' + original_signal + '载入数据。')
+            print('数据长度为' + str(len(signal)) + '。')
+        else:
+            print('未找到指定文件，请重新确认文件路径。')
+            exit(-2)
+    elif isinstance(original_signal, np.ndarray):
+        signal = original_signal.flatten()
+        print('已成功从数组载入数据。')
+        print('数据长度为' + str(len(signal)) + '。')
+    else:
+        print('进行了无效的导入数据操作。请确认您的导入内容为json路径或numpy数组。')
+        exit(-3)
+
+    if sampling_matrix is None:
+        sampling_operation = 0
+    elif isinstance(sampling_matrix, np.ndarray):
+        sampling_matrix = sampling_matrix.flatten()
+        print('采样矩阵已导入。规模为' + str(len(sampling_matrix)) + '。')
+        sampling_operation = 1
+    else:
+        print('请导入np.ndarray类型的采样矩阵。')
+        exit(-4)
+
+    if pieces_length <= 0 or pieces_length is None or pieces_length >= len(signal):
+        if sampling_operation == 1 and len(sampling_matrix) != len(signal):
+            print('采样矩阵规模与切片长度不符。')
+            print('采样矩阵规模为' + str(len(sampling_matrix)) + '，切片长度为' + str(pieces_length) + '。')
+            exit(-5)
+        else:
+            pieces_disable = 1
+            print('正在执行不切片复原算法。')
+    else:
+        if sampling_operation == 1 and len(sampling_matrix) != pieces_length:
+            print('采样矩阵规模与信号长度不符。')
+            print('采样矩阵规模为' + str(len(sampling_matrix)) + '，信号长度为' + str(len(signal)) + '。')
+            exit(-6)
+        else:
+            pieces_disable = 0
+            print('正在执行分片复原算法。单个切片长度为' + str(pieces_length) + ",预计切片总数为" +
+                  str(divide_and_round_up(len(signal), pieces_length)) + '。')
+
+    if pieces_disable == 0:
+        pieced_arrays = split_array(original_signal, pieces_length)
+    else:
+        pieced_arrays = [signal]
+    solved_list = []
+    print('已开始复原信号。')
+    for i in tqdm(range(len(pieced_arrays)), disable=bool(pieces_disable)):
+        arr = pieced_arrays[i]
+        t = generate_t_line(random.random() - 1, t_range, arr.shape[0])
+        weight = np.zeros(dictionary_scale)
+
+        # 初始化残差信号，其初值为原始信号，在每一轮循环中会减去相关程度最高的字典信号
+        residual = arr.copy()
+
+        # 初始化支持集，其内容为已被选中的字典信号的索引
+        support = []
+
+        # 迭代直至误差可容忍或迭代次数过多
+        for time in range(time_tolerance):
+            corr = np.zeros(dictionary_scale)
+            if sampling_operation == 1:
+                sampling_matrix = sampling_matrix[:len(arr)]
+            dictionary_store = {}
+            # 计算每个序号对应的字典元素与当前残差的相关性
+            for rank in range(dictionary_scale):
+                system_memory_info = psutil.virtual_memory()
+                Memory_Available = system_memory_info.available / 1024 / 1024
+                if rank in dictionary_store.keys():
+                    dictionary_element = dictionary_store[rank]
+                elif Memory_Available > 2048:
+                    dictionary_element = generate_dictionary_element(t, dictionary_scale, rank)
+                    dictionary_store[rank] = dictionary_element
+                else:
+                    dictionary_element = generate_dictionary_element(t, dictionary_scale, rank)
+
+                if sampling_operation == 1:
+                    corr[rank] = (dictionary_element * sampling_matrix).T @ residual
+                else:
+                    corr[rank] = dictionary_element.T @ residual
+
+            # 寻找最佳匹配元素
+            corr_max = np.max(np.abs(corr))
+            append_support = [index for index, value in enumerate(corr) if np.abs(value) > 0.8 * corr_max]
+            support = list(set(append_support + support))
+
+            # 生成临时字典
+            temporary_dictionary = np.array(
+                [generate_dictionary_element(t, dictionary_scale, rank) for rank in support]).T
+            if sampling_operation == 1:
+                temporary_sampling_matrix = np.broadcast_to(sampling_matrix.T, (len(support), len(sampling_matrix)))
+                temporary_dictionary = temporary_sampling_matrix.T * temporary_dictionary
+
+            # 解决最小方差问题
+            weight[support] = np.linalg.lstsq(temporary_dictionary, arr, rcond=None)[0]
+            temporary_weight = np.zeros(len(support))
+            for j in range(len(support)):
+                temporary_weight[j] = weight[support[j]]
+
+            # 更新残差
+            residual = arr - temporary_dictionary @ temporary_weight[:len(support)]
+
+            # 记录迭代次数
+            time += 1
+
+            mse = np.linalg.norm(residual)
+            if mse < mse_tolerance:
+                break
+
+        recovered_signal = np.zeros(len(arr))
+        for rank in support:
+            recovered_signal = recovered_signal + dictionary_store[rank] * weight[rank]
+
+        # 将solved_arr添加到solved_arr_list中
+        solved_list.append(recovered_signal)
+
+    # 将solved_arr_list中的子数组拼接成一维数组
+    result = np.concatenate(solved_list)
+    residual = original_signal - result
+    mse = count_mse(original_signal, result)
+    t = generate_t_line(0, t_range, len(result))
+    if picture_output == 1:
+        draw_triple_signal(t, original_signal, result, np.abs(residual))
+
+    return result, mse
+    # 初始化权重数组，用于表示字典中每个元素的权重
